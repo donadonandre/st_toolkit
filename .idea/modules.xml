@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../app-test-toolkit/.idea/app-test-toolkit.iml" filepath="$PROJECT_DIR$/../app-test-toolkit/.idea/app-test-toolkit.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/toolkit.iml" filepath="$PROJECT_DIR$/.idea/toolkit.iml" />
     </modules>
   </component>
