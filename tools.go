@@ -13,29 +13,36 @@ import (
 
 const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
 
+// Tools is the type used to instantiate this module. Any variable of this type will have access
+// to all the methods with the reciever *Tools
 type Tools struct {
 	MaxFileSize      int
 	AllowedFileTypes []string
 }
 
+// RandomString returns a string of random characters of length n, using randomStringSource
+// as the source for the string
 func (t *Tools) RandomString(n int) string {
 	s, r := make([]rune, n), []rune(randomStringSource)
 	for i := range s {
 		p, _ := rand.Prime(rand.Reader, len(r))
-		x, y := p.Uint64(), uint64((len(r)))
+		x, y := p.Uint64(), uint64(len(r))
 		s[i] = r[x%y]
 	}
 
 	return string(s)
 }
 
-type UploadFile struct {
+// UploadedFile is a struct used to save information about an uploaded file
+type UploadedFile struct {
 	NewFileName      string
 	OriginalFileName string
 	FileSize         int64
 }
 
-func (t *Tools) UploadedOneFile(r *http.Request, uploadDir string, rename ...bool) (*UploadFile, error) {
+// UploadOneFile is just a convenience method that calls UploadFiles, but expects only one file to
+// be in the upload.
+func (t *Tools) UploadOneFile(r *http.Request, uploadDir string, rename ...bool) (*UploadedFile, error) {
 	renameFile := true
 	if len(rename) > 0 {
 		renameFile = rename[0]
@@ -49,13 +56,18 @@ func (t *Tools) UploadedOneFile(r *http.Request, uploadDir string, rename ...boo
 	return files[0], nil
 }
 
-func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) ([]*UploadFile, error) {
+// UploadFiles uploads one or more file to a specified directory, and gives the files a random name.
+// It returns a slice containing the newly named files, the original file names, the size of the files,
+// and potentially an error. If the optional last parameter is set to true, then we will not rename
+// the files, but will use the original file names.
+func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) ([]*UploadedFile, error) {
 	renameFile := true
 	if len(rename) > 0 {
 		renameFile = rename[0]
 	}
 
-	var uploadedFiles []*UploadFile
+	var uploadedFiles []*UploadedFile
+
 	if t.MaxFileSize == 0 {
 		t.MaxFileSize = 1024 * 1024 * 1024
 	}
@@ -67,13 +79,12 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 
 	for _, fHeaders := range r.MultipartForm.File {
 		for _, hdr := range fHeaders {
-			uploadedFiles, err = func(uploadedFiles []*UploadFile) ([]*UploadFile, error) {
-				var uploadedFile UploadFile
+			uploadedFiles, err = func(uploadedFiles []*UploadedFile) ([]*UploadedFile, error) {
+				var uploadedFile UploadedFile
 				infile, err := hdr.Open()
 				if err != nil {
 					return nil, err
 				}
-
 				defer infile.Close()
 
 				buff := make([]byte, 512)
@@ -82,9 +93,9 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 					return nil, err
 				}
 
+				// check to see if the file type is permitted
 				allowed := false
 				fileType := http.DetectContentType(buff)
-				//allowedTypes := []string{"image/jpeg", "image/png", "image/gif"}
 
 				if len(t.AllowedFileTypes) > 0 {
 					for _, x := range t.AllowedFileTypes {
@@ -106,7 +117,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 				}
 
 				if renameFile {
-					uploadedFile.NewFileName = fmt.Sprintf("%s%s", t.RandomString(10), filepath.Ext(hdr.Filename))
+					uploadedFile.NewFileName = fmt.Sprintf("%s%s", t.RandomString(25), filepath.Ext(hdr.Filename))
 				} else {
 					uploadedFile.NewFileName = hdr.Filename
 				}
@@ -116,28 +127,24 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 				var outfile *os.File
 				defer outfile.Close()
 
-				outfile, err = os.Create(filepath.Join(uploadDir, uploadedFile.NewFileName))
-				if err != nil {
+				if outfile, err = os.Create(filepath.Join(uploadDir, uploadedFile.NewFileName)); err != nil {
 					return nil, err
 				} else {
 					fileSize, err := io.Copy(outfile, infile)
 					if err != nil {
 						return nil, err
 					}
-
 					uploadedFile.FileSize = fileSize
 				}
 
-				defer outfile.Close()
-
 				uploadedFiles = append(uploadedFiles, &uploadedFile)
 
-				return uploadedFiles, err
+				return uploadedFiles, nil
 			}(uploadedFiles)
 			if err != nil {
 				return uploadedFiles, err
 			}
 		}
 	}
-	return uploadedFiles, err
+	return uploadedFiles, nil
 }
